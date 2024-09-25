@@ -140,7 +140,7 @@ func initMq() (<-chan amqp.Delivery, chan *amqp.Error, error) {
 		return nil, nil, err
 	}
 
-	queueName := "apple-push-notification"
+	queueName := "apple_push_notification"
 
 	_, err = ch.QueueDeclare(
 		queueName,
