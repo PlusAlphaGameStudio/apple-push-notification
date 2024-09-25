@@ -80,9 +80,15 @@ func main() {
 	for {
 		select {
 		case <-onCloseMq:
-			log.Printf("connection lost with MQ! Try to reconnect in 2 seconds...\n")
-			<-time.After(2 * time.Second)
-			deliveries, onCloseMq, err = initMq()
+			for {
+				log.Printf("connection lost with MQ! Try to reconnect in 2 seconds...\n")
+				<-time.After(2 * time.Second)
+				deliveries, onCloseMq, err = initMq()
+				if err == nil {
+					log.Printf("Reconnected successfully!\n")
+					break
+				}
+			}
 		case delivery := <-deliveries:
 			log.Printf("%v\n", string(delivery.Body))
 			var message Message
