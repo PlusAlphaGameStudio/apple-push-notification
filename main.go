@@ -50,7 +50,7 @@ func main() {
 		log.Println("Error loading .env file")
 	}
 
-	deliveries, err := initMq()
+	deliveries, onCloseMq, err := initMq()
 	if err != nil {
 		panic(err)
 	}
@@ -79,6 +79,10 @@ func main() {
 	// 요청 메시지 받기 시작
 	for {
 		select {
+		case <-onCloseMq:
+			log.Printf("connection lost with MQ! Try to reconnect in 2 seconds...\n")
+			<-time.After(2 * time.Second)
+			deliveries, onCloseMq, err = initMq()
 		case delivery := <-deliveries:
 			log.Printf("%v\n", string(delivery.Body))
 			var message Message
@@ -120,20 +124,20 @@ func initHttpClient() *http.Client {
 	}
 }
 
-func initMq() (<-chan amqp.Delivery, error) {
+func initMq() (<-chan amqp.Delivery, chan *amqp.Error, error) {
 	conn, err := amqp.Dial(os.Getenv("FCMCG_RMQ_ADDR"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ch, err := conn.Channel()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	err = ch.Confirm(false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	queueName := "apple-push-notification"
@@ -146,7 +150,7 @@ func initMq() (<-chan amqp.Delivery, error) {
 		false,
 		nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	deliveries, err := ch.Consume(
@@ -160,10 +164,12 @@ func initMq() (<-chan amqp.Delivery, error) {
 	)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return deliveries, nil
+	onClose := conn.NotifyClose(make(chan *amqp.Error))
+
+	return deliveries, onClose, nil
 }
 
 func generateJWTToken(keyID, teamID string, privateKey []byte) (string, error) {
