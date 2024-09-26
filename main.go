@@ -61,20 +61,16 @@ func main() {
 	keyID := os.Getenv("PEM_KEY_ID")
 	teamID := os.Getenv("TEAM_ID")
 	bundleID := os.Getenv("BUNDLE_ID")
-	//deviceToken := os.Getenv("TEST_DEVICE_TOKEN")
 	isProduction := os.Getenv("IS_PRODUCTION") == "1"
 
-	// Auth Key 파일 로드
-	privateKey, err := os.ReadFile(os.Getenv("PEM_FILE_PATH"))
+	// Auth Key 파일 로드 (PEM 형식)
+	pemFileBytes, err := os.ReadFile(os.Getenv("PEM_FILE_PATH"))
 	if err != nil {
 		panic(err)
 	}
 
-	// JWT 토큰 생성
-	jwtToken, err := generateJWTToken(keyID, teamID, privateKey)
-	if err != nil {
-		panic(err)
-	}
+	// PEM 파일에서 private key 부분을 파싱
+	privateKey, err := parsePEMForPrivateKey(pemFileBytes)
 
 	// 요청 메시지 받기 시작
 	for {
@@ -105,6 +101,12 @@ func main() {
 					//Sound: "default",
 					//Badge: 1,
 				},
+			}
+
+			// JWT 토큰 생성 (보낼 때마다 생성인데 이렇게 자주 해야되나?)
+			jwtToken, err := generateJWTToken(keyID, teamID, privateKey)
+			if err != nil {
+				panic(err)
 			}
 
 			// 푸시 알림 전송
@@ -178,7 +180,7 @@ func initMq() (<-chan amqp.Delivery, chan *amqp.Error, error) {
 	return deliveries, onClose, nil
 }
 
-func generateJWTToken(keyID, teamID string, privateKey []byte) (string, error) {
+func generateJWTToken(keyID, teamID string, pemPrivateKey any) (string, error) {
 	now := time.Now()
 	claims := jwt.StandardClaims{
 		Issuer:   teamID,
@@ -188,11 +190,20 @@ func generateJWTToken(keyID, teamID string, privateKey []byte) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
 	token.Header["kid"] = keyID
 
-	// 개인 키 파싱
+	// 토큰 서명
+	tokenString, err := token.SignedString(pemPrivateKey)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+func parsePEMForPrivateKey(pemBytes []byte) (any, error) {
 	var key any
 	var err error
 
-	for block, rest := pem.Decode(privateKey); block != nil; block, rest = pem.Decode(rest) {
+	for block, rest := pem.Decode(pemBytes); block != nil; block, rest = pem.Decode(rest) {
 		switch block.Type {
 		case "CERTIFICATE":
 			cert, err := x509.ParseCertificate(block.Bytes)
@@ -216,14 +227,7 @@ func generateJWTToken(keyID, teamID string, privateKey []byte) (string, error) {
 			panic("unknown block type")
 		}
 	}
-
-	// 토큰 서명
-	tokenString, err := token.SignedString(key)
-	if err != nil {
-		return "", err
-	}
-
-	return tokenString, nil
+	return key, err
 }
 
 func sendPushNotification(client *http.Client, deviceToken string, payload APNsPayload, jwtToken, bundleID string, isProduction bool) error {
