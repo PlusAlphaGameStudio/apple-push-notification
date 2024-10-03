@@ -61,7 +61,7 @@ func main() {
 	keyID := os.Getenv("PEM_KEY_ID")
 	teamID := os.Getenv("TEAM_ID")
 	bundleID := os.Getenv("BUNDLE_ID")
-	isProduction := os.Getenv("IS_PRODUCTION") == "1"
+	//isProduction := os.Getenv("IS_PRODUCTION") == "1"
 
 	// Auth Key 파일 로드 (PEM 형식)
 	pemFileBytes, err := os.ReadFile(os.Getenv("PEM_FILE_PATH"))
@@ -110,9 +110,17 @@ func main() {
 			}
 
 			// 푸시 알림 전송
-			err = sendPushNotification(client, message.Token, payload, jwtToken, bundleID, isProduction)
+			err = sendPushNotification(client, message.Token, payload, jwtToken, bundleID, false)
 			if err != nil {
 				fmt.Printf("Error: %v\n", err)
+				fmt.Printf("Sandbox send failed. Try production...")
+				err = sendPushNotification(client, message.Token, payload, jwtToken, bundleID, true)
+				if err != nil {
+					fmt.Printf("Error: %v\n", err)
+					fmt.Printf("Production send also failed. ;(")
+				} else {
+					fmt.Println("Success")
+				}
 			} else {
 				fmt.Println("Success")
 			}
