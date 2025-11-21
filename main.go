@@ -160,7 +160,7 @@ func initMq() (<-chan amqp.Delivery, chan *amqp.Error, error) {
 
 	_, err = ch.QueueDeclare(
 		queueName,
-		false,
+		true,
 		false,
 		false,
 		false,
