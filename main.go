@@ -141,7 +141,9 @@ func initHttpClient() *http.Client {
 }
 
 func initMq() (<-chan amqp.Delivery, chan *amqp.Error, error) {
-	conn, err := amqp.Dial(os.Getenv("FCMCG_RMQ_ADDR"))
+	conn, err := amqp.DialConfig(os.Getenv("FCMCG_RMQ_ADDR"), amqp.Config{
+		Properties: amqp.Table{"connection_name": "apple-push-notification"},
+	})
 	if err != nil {
 		return nil, nil, err
 	}
